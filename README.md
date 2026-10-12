@@ -10,6 +10,8 @@ One class, one JVM: a publisher and a consumer on separate connections, 512 B bo
 
 ## Run
 
+Needs JDK 17+, Maven 3.6.3+, and RabbitMQ 4.x (Docker below).
+
 ```sh
 docker run -d --name user-id-repro -p 5672:5672 \
   -e RABBITMQ_DEFAULT_USER=repro -e RABBITMQ_DEFAULT_PASS=repro \
@@ -74,17 +76,17 @@ Links at tag `v1.6.0`, protonj2 as bundled under `src/main/qpid`.
    releases that slice only through a `Cleaner`, i.e. after the `Binary` is garbage collected.
 
 An 8 B `user-id` therefore holds a reference on a 64 KiB read buffer, shared by the few messages of
-that read. Netty's pooled
-allocator never triggers a GC when it reaches the direct memory limit, unlike
-`ByteBuffer.allocateDirect`, so it fails while the heap is far from full.
+that read: ~18 KiB pinned per message here (88 MiB/s at 5,000 msg/s). Netty's pooled allocator
+never triggers a GC when it reaches the direct memory limit, unlike `ByteBuffer.allocateDirect`, so
+it fails while the heap is far from full.
 
 The body is not affected:
 [`DataTypeDecoder.java:84`](https://github.com/rabbitmq/rabbitmq-amqp-java-client/blob/v1.6.0/src/main/qpid/org/apache/qpid/protonj2/codec/decoders/messaging/DataTypeDecoder.java#L84-L87)
 copies it into a heap buffer "to avoid retaining any pooled buffers for prolonged periods of time".
 
 Over TLS the same happens at a lower rate: `SslHandler` decrypts into a buffer sized to the
-decrypted bytes, so each `user-id` pins less (~0.8 KiB vs ~27 KiB per message, measured with a
-512 B body).
+decrypted bytes, not 64 KiB, so each `user-id` pins less. We measured ~0.8 KiB per message over TLS
+in a separate setup; this repro runs plaintext only.
 
 ## Suggested fix
 
@@ -100,3 +102,4 @@ already does for the body.
 | JDK | 25.0.2 |
 | Maven | 3.6.3 |
 | RabbitMQ | 4.1.4 |
+| OS | Linux x86_64 |
