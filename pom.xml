@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>repro</groupId>
+    <artifactId>rabbitmq-amqp-java-client-direct-memory-leak-repro</artifactId>
+    <version>1.0</version>
+
+    <properties>
+        <maven.compiler.release>17</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <amqp-client.version>1.6.0</amqp-client.version>
+        <userId>true</userId>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.rabbitmq.client</groupId>
+            <artifactId>amqp-client</artifactId>
+            <version>${amqp-client.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-simple</artifactId>
+            <!-- matches the slf4j-api 1.7.x that amqp-client brings in -->
+            <version>1.7.36</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.14.0</version>
+            </plugin>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.5.0</version>
+                <configuration>
+                    <executable>java</executable>
+                    <arguments>
+                        <!-- Large fixed young generation: no GC during the run, so only explicit releases free direct memory. -->
+                        <argument>-Xms1g</argument>
+                        <argument>-Xmx1g</argument>
+                        <argument>-Xmn768m</argument>
+                        <argument>-XX:MaxDirectMemorySize=1g</argument>
+                        <argument>-Dorg.slf4j.simpleLogger.defaultLogLevel=warn</argument>
+                        <argument>-classpath</argument>
+                        <classpath/>
+                        <argument>repro.UserIdDirectMemoryRepro</argument>
+                        <argument>${userId}</argument>
+                    </arguments>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
